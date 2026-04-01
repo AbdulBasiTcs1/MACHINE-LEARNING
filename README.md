@@ -1,5 +1,8 @@
-This is the MACHINE-LEARNING-FUNDAMENTALS Repo
-1. AI mostly concepts was also cleared in this repo.
-2. Machine Learning will now starts.
-3. Covered the Basics of Python For ML
-4. Understood the Data and Memory Usage for Machine Learning
+THIS WILL BE THE FULL MACHINE LEARNING REPO!
+NEXT TOPICS I WANT TO COVER ARE :
+1. Decision tree
+2. Knn 
+3. K mean
+4. Logistics regression
+5. Linear regression
+6. Naive byes
