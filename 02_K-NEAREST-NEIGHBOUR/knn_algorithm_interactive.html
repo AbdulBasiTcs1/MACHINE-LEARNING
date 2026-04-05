@@ -1,0 +1,130 @@
+
+<style>
+canvas { cursor: crosshair; border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-tertiary); }
+.ctrl { display:flex; align-items:center; gap:10px; margin:10px 0 6px; font-size:13px; color:var(--color-text-secondary); flex-wrap:wrap; }
+.badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:500; }
+.badge.A { background:#EEEDFE; color:#3C3489; }
+.badge.B { background:#FAECE7; color:#993C1D; }
+.badge.C { background:#E1F5EE; color:#085041; }
+#verdict { font-size:14px; font-weight:500; color:var(--color-text-primary); min-height:22px; }
+</style>
+<div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:6px;">Click anywhere on the canvas to classify a new point using your chosen K</div>
+<div class="ctrl">
+  <span>K =</span>
+  <input type="range" min="1" max="9" step="2" value="3" id="kSlider" style="width:100px">
+  <span id="kVal" style="font-weight:500;color:var(--color-text-primary);">3</span>
+  <span style="margin-left:8px;">Classes:</span>
+  <span class="badge A">● Class A</span>
+  <span class="badge B">● Class B</span>
+  <span class="badge C">● Class C</span>
+</div>
+<canvas id="c" width="640" height="340"></canvas>
+<div class="ctrl" style="margin-top:8px;">
+  <div id="verdict">Click on the canvas to classify a point ↑</div>
+  <button onclick="resetPoints()" style="margin-left:auto;">Reset</button>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+
+const colors = {
+  A: { fill:'#7F77DD', light:'#EEEDFE', text:'#3C3489', border:'#534AB7' },
+  B: { fill:'#D85A30', light:'#FAECE7', text:'#993C1D', border:'#993C1D' },
+  C: { fill:'#1D9E75', light:'#E1F5EE', text:'#085041', border:'#0F6E56' }
+};
+
+let points = [
+  {x:80,y:80,cls:'A'},{x:120,y:120,cls:'A'},{x:90,y:160,cls:'A'},{x:150,y:70,cls:'A'},{x:60,y:200,cls:'A'},
+  {x:180,y:200,cls:'A'},{x:130,y:240,cls:'A'},
+  {x:350,y:100,cls:'B'},{x:400,y:140,cls:'B'},{x:430,y:80,cls:'B'},{x:480,y:120,cls:'B'},{x:370,y:180,cls:'B'},
+  {x:460,y:200,cls:'B'},{x:500,y:60,cls:'B'},
+  {x:220,y:270,cls:'C'},{x:280,y:290,cls:'C'},{x:320,y:260,cls:'C'},{x:260,y:230,cls:'C'},{x:350,y:290,cls:'C'},
+  {x:200,y:310,cls:'C'},{x:400,y:280,cls:'C'},
+];
+
+let query = null;
+let k = 3;
+
+function dist(a,b){ return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2); }
+
+function draw(){
+  ctx.clearRect(0,0,640,340);
+  const bg = isDark ? '#1a1a18' : '#fafaf8';
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,640,340);
+
+  if(query){
+    const sorted = [...points].map(p=>({...p,d:dist(p,query)})).sort((a,b)=>a.d-b.d);
+    const neighbors = sorted.slice(0,k);
+    const radius = neighbors[k-1].d;
+
+    ctx.beginPath();
+    ctx.arc(query.x, query.y, radius, 0, Math.PI*2);
+    ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)';
+    ctx.setLineDash([5,4]);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    neighbors.forEach(p=>{
+      ctx.beginPath();
+      ctx.moveTo(query.x,query.y);
+      ctx.lineTo(p.x,p.y);
+      ctx.strokeStyle = colors[p.cls].border + '88';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    const votes = {};
+    neighbors.forEach(p=>{ votes[p.cls]=(votes[p.cls]||0)+1; });
+    const winner = Object.entries(votes).sort((a,b)=>b[1]-a[1])[0][0];
+
+    const voteStr = Object.entries(votes).map(([c,v])=>`${c}:${v}`).join(', ');
+    document.getElementById('verdict').innerHTML =
+      `Votes → ${voteStr} &nbsp;|&nbsp; Predicted class: <span style="color:${colors[winner].fill};font-weight:600">${winner}</span>`;
+
+    ctx.beginPath();
+    ctx.arc(query.x,query.y,11,0,Math.PI*2);
+    ctx.fillStyle = colors[winner].fill;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(query.x,query.y,11,0,Math.PI*2);
+    ctx.strokeStyle='#fff';
+    ctx.lineWidth=2.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(query.x,query.y,5,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.9)';
+    ctx.fill();
+  }
+
+  points.forEach(p=>{
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,7,0,Math.PI*2);
+    ctx.fillStyle = colors[p.cls].fill;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+}
+
+canvas.addEventListener('click', e=>{
+  const r = canvas.getBoundingClientRect();
+  const scaleX = 640/r.width, scaleY = 340/r.height;
+  query = { x:(e.clientX-r.left)*scaleX, y:(e.clientY-r.top)*scaleY };
+  draw();
+});
+
+document.getElementById('kSlider').addEventListener('input', e=>{
+  k = +e.target.value;
+  document.getElementById('kVal').textContent = k;
+  if(query) draw();
+});
+
+function resetPoints(){ query=null; document.getElementById('verdict').textContent='Click on the canvas to classify a point ↑'; draw(); }
+
+draw();
+</script>
