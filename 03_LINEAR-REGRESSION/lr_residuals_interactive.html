@@ -1,0 +1,136 @@
+
+<style>
+canvas { border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-tertiary); display:block; width:100%; }
+.row { display:flex; align-items:center; gap:10px; margin:8px 0; font-size:13px; color:var(--color-text-secondary); }
+.pill { padding:5px 12px; border-radius:20px; font-size:12px; font-weight:500; display:inline-flex; align-items:center; gap:6px; }
+.pill.blue { background:#E6F1FB; color:#0C447C; }
+.pill.red  { background:#FBEAF0; color:#72243E; }
+.pill.grn  { background:#EAF3DE; color:#27500A; }
+</style>
+
+<div class="row">
+  <span class="pill blue"><span style="display:inline-block;width:14px;height:3px;background:#378ADD;border-radius:2px;"></span> Regression line</span>
+  <span class="pill red"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#D4537E;"></span> Actual data</span>
+  <span class="pill grn"><span style="display:inline-block;width:10px;height:2px;border:1px dashed #639922;"></span> Residuals (errors)</span>
+</div>
+
+<canvas id="cv" height="300"></canvas>
+
+<div class="row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">
+  <span style="min-width:70px;">Slope (b)</span>
+  <input type="range" min="5000" max="15000" step="100" value="9346" id="slope" style="flex:1; min-width:100px;">
+  <span id="sVal" style="min-width:60px; font-weight:500; color:var(--color-text-primary);">9346</span>
+</div>
+<div class="row" style="flex-wrap:wrap; gap:8px;">
+  <span style="min-width:70px;">Intercept (a)</span>
+  <input type="range" min="10000" max="50000" step="500" value="26816" id="intercept" style="flex:1; min-width:100px;">
+  <span id="iVal" style="min-width:60px; font-weight:500; color:var(--color-text-primary);">26816</span>
+</div>
+
+<div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+  <div style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:8px 14px; font-size:13px; color:var(--color-text-secondary);">
+    Equation: <span id="eq" style="font-weight:500; color:var(--color-text-primary);">Salary = 9346 × Exp + 26816</span>
+  </div>
+  <div style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:8px 14px; font-size:13px; color:var(--color-text-secondary);">
+    Total MSE: <span id="mse" style="font-weight:500; color:var(--color-text-primary);">—</span>
+  </div>
+  <button onclick="fitBest()" style="margin-left:auto;">Best fit ↗</button>
+</div>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+const W = 640, H = 300;
+cv.width = W; cv.height = H;
+const PAD = 50;
+
+const data = [
+  {x:1.1, y:39343},{x:1.3, y:46205},{x:1.5, y:37731},{x:2.0, y:43525},
+  {x:2.2, y:39891},{x:2.9, y:56642},{x:3.0, y:60150},{x:3.2, y:54445},
+  {x:3.2, y:64445},{x:3.7, y:57189},{x:3.9, y:63218},{x:4.0, y:55794},
+  {x:4.0, y:56957},{x:4.1, y:57081},{x:4.5, y:61111},{x:4.9, y:67938},
+  {x:5.1, y:66029},{x:5.3, y:83088},{x:5.9, y:81363},{x:6.0, y:93940},
+  {x:6.8, y:91738},{x:7.1, y:98273},{x:7.9, y:101302},{x:8.2, y:113812},
+  {x:8.7, y:109431},{x:9.0, y:105582},{x:9.5, y:116969},{x:9.6, y:112635},
+  {x:10.3, y:122391},{x:10.5, y:121872}
+];
+
+const xMin=0, xMax=11, yMin=30000, yMax=140000;
+
+function toC(x, y) {
+  return [
+    PAD + (x-xMin)/(xMax-xMin)*(W-2*PAD),
+    H-PAD - (y-yMin)/(yMax-yMin)*(H-2*PAD)
+  ];
+}
+
+function draw() {
+  const b = parseFloat(document.getElementById('slope').value);
+  const a = parseFloat(document.getElementById('intercept').value);
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = isDark ? '#1a1a18' : '#fafaf8';
+  ctx.fillRect(0,0,W,H);
+
+  const gc = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  ctx.strokeStyle = gc; ctx.lineWidth = 1;
+  for(let x=0;x<=11;x+=2){const[cx]=toC(x,0);ctx.beginPath();ctx.moveTo(cx,PAD);ctx.lineTo(cx,H-PAD);ctx.stroke();}
+  for(let y=40000;y<=140000;y+=20000){const[,cy]=toC(0,y);ctx.beginPath();ctx.moveTo(PAD,cy);ctx.lineTo(W-PAD,cy);ctx.stroke();}
+
+  const ac = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
+  ctx.strokeStyle=ac; ctx.lineWidth=1;
+  const[ax0,ay0]=toC(xMin,yMin);const[ax1,ay1]=toC(xMax,yMin);const[,ay2]=toC(xMin,yMax);
+  ctx.beginPath();ctx.moveTo(ax0,ay0);ctx.lineTo(ax1,ay1);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(ax0,ay0);ctx.lineTo(ax0,ay2);ctx.stroke();
+
+  const tc = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+  ctx.fillStyle=tc; ctx.font='11px sans-serif';
+  ctx.textAlign='center';
+  for(let x=0;x<=10;x+=2){const[cx,cy]=toC(x,yMin);ctx.fillText(x+'yr',cx,cy+14);}
+  ctx.textAlign='right';
+  for(let y=40000;y<=140000;y+=20000){const[cx,cy]=toC(xMin,y);ctx.fillText('$'+(y/1000)+'k',cx-4,cy+4);}
+
+  let mseTotal = 0;
+  data.forEach(p => {
+    const pred = b * p.x + a;
+    mseTotal += (p.y - pred)**2;
+    const [px,py] = toC(p.x, p.y);
+    const [,ppy] = toC(p.x, pred);
+    ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px,ppy);
+    ctx.strokeStyle = isDark ? 'rgba(180,90,130,0.55)' : 'rgba(180,80,120,0.45)';
+    ctx.lineWidth=1.5; ctx.setLineDash([3,3]); ctx.stroke(); ctx.setLineDash([]);
+  });
+
+  const [lx0,ly0]=toC(xMin, b*xMin+a);
+  const [lx1,ly1]=toC(xMax, b*xMax+a);
+  ctx.beginPath(); ctx.moveTo(lx0,ly0); ctx.lineTo(lx1,ly1);
+  ctx.strokeStyle='#378ADD'; ctx.lineWidth=2.5; ctx.stroke();
+
+  data.forEach(p => {
+    const [px,py]=toC(p.x,p.y);
+    ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2);
+    ctx.fillStyle='#D4537E'; ctx.fill();
+    ctx.strokeStyle=isDark?'#F4C0D1':'#fff'; ctx.lineWidth=1.5; ctx.stroke();
+  });
+
+  document.getElementById('sVal').textContent = b.toLocaleString();
+  document.getElementById('iVal').textContent = a.toLocaleString();
+  document.getElementById('eq').textContent = `Salary = ${b.toLocaleString()} × Exp + ${a.toLocaleString()}`;
+  document.getElementById('mse').textContent = (mseTotal/data.length/1e6).toFixed(2) + 'M';
+}
+
+function fitBest() {
+  const n = data.length;
+  const xBar = data.reduce((s,p)=>s+p.x,0)/n;
+  const yBar = data.reduce((s,p)=>s+p.y,0)/n;
+  const b = data.reduce((s,p)=>s+(p.x-xBar)*(p.y-yBar),0)/data.reduce((s,p)=>s+(p.x-xBar)**2,0);
+  const a = yBar - b*xBar;
+  document.getElementById('slope').value = Math.round(b);
+  document.getElementById('intercept').value = Math.round(a);
+  draw();
+}
+
+document.getElementById('slope').addEventListener('input', draw);
+document.getElementById('intercept').addEventListener('input', draw);
+draw();
+</script>
